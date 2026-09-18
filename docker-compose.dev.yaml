@@ -18,7 +18,12 @@ services:
   frontend:
     container_name: evolution_frontend
     image: evolution/manager:local
-    build: ./evolution-manager-v2
+    build:
+      context: ./evolution-manager-v2
+      args:
+        # Sobe o manager com a API mockada no navegador, sem backend algum.
+        # Só para prototipagem — nunca em ambiente exposto.
+        VITE_DEMO_MODE: "true"
     restart: always
     ports:
       - "3000:80"

@@ -130,24 +130,57 @@ Três detalhes que custaram para descobrir e não devem ser redescobertos:
 Rotas não simuladas respondem **501 com mensagem explícita**, para que um limite
 do modo demo não seja confundido com bug de tela.
 
-### Dívidas temporárias do protótipo
+### Fase 1 ligada nos dados reais (commit `81d2656` no submódulo)
 
-Estas **devem ser desfeitas** na implementação real:
+A tela deixou de ler `mockData.ts` — o arquivo foi apagado. Agora monta o
+panorama a partir de contagens ao `POST /chat/findMessages`, atrás da interface
+`PerformanceSource`. Trocar para o endpoint agregado da fase 2 é apontar
+`usePerformanceOverview` para outro adapter e apagar um arquivo.
+
+Módulos novos em `src/lib/performance/`: `types.ts` (contrato), `buckets.ts`,
+`delivery.ts`, `concurrency.ts`, `findMessagesSource.ts`. Os três primeiros têm
+testes — **20 testes, vitest rodando em container**, com `TZ` fixo.
+
+**Medições contra a instância conectada, não suposições:**
+
+| O quê | Resultado |
+|---|---|
+| `messages.total` com `offset: 1` | Funciona; conta sem trafegar mensagens |
+| `key.fromMe: true` | 118 de 211 — filtra |
+| `key.fromMe: false` | 211 — **ignorado**, como o spec previa |
+| Soma dos 30 buckets vs. contagem única | 161 = 161, e 96 = 96 enviadas — **fecha exato** |
+| 60 requisições (série de 30 dias) | **552 ms** |
+
+A soma bater com a contagem direta é o que prova que as janelas não se
+sobrepõem nem deixam buraco: sobreposição inflaria o total, buraco o reduziria.
+
+**O `loadTimeMs` decide a fase 2, e a medida já existe: ~550 ms.** Isso é rápido
+o bastante para a fase 2 não ser urgente. A ressalva é o volume: esta medição é
+sobre ~200 mensagens e sem o índice `(instanceId, messageTimestamp)`. Refazer a
+medida numa instância com volume real antes de concluir.
+
+### Dívidas do protótipo — situação
+
+Estas **deviam ser desfeitas** na implementação real:
 
 1. ~~A rota não usa `ProtectedRoute`~~ — **resolvido** no commit `84cc6e7`. A
    rota agora usa `<ProtectedRoute feature="performance">`, e o gate
    `performance` está amarrado a `IS_DEMO`, para que um build normal não exponha
    um dashboard fictício.
-2. Textos da tela de Performance **fixos em pt-BR**, fora do i18next. Na
-   implementação real vão para as quatro línguas (`pt-BR`, `en-US`, `es-ES`,
-   `fr-FR`). O campo de headers do webhook **já** está nas quatro.
-3. Banner amarelo fixo no topo avisando que os números são fictícios.
+2. ~~Textos fixos em pt-BR~~ — **resolvido**: a tela inteira passou para o
+   i18next nas quatro línguas.
+3. ~~Banner de dados fictícios~~ — **removido**, junto com os dados fictícios.
 4. A paleta das séries (verde `#189d68` / azul `#3b82f6`) **não passou pelo
    validador de daltonismo** do skill de dataviz. Mitigado com legenda e rótulos,
-   mas vale validar antes de virar padrão.
-5. `mockData.ts` continua a fonte da tela de Performance. O modo demo **não**
-   alimenta essa tela — são dois mocks independentes, e só o de Performance é
-   descartável.
+   mas continua pendente.
+5. ~~`mockData.ts`~~ — **apagado**. O modo demo agora simula também o
+   `findMessages`, com números determinísticos por janela, para que a aba
+   funcione na stack de demonstração.
+6. **Entrega e leitura é amostra**, não o período inteiro: as últimas 200
+   enviadas, rotulado na tela. Some na fase 2.
+7. **`vitest.config.ts` é separado do `vite.config.ts` de propósito** — o vitest
+   2 traz o próprio Vite 5, cujos tipos conflitam com o Vite 7 do projeto e
+   quebram o `tsc -b`. Some quando o vitest acompanhar o Vite 7.
 
 ## 6. Como retomar
 
@@ -317,15 +350,19 @@ coisa**, e só então conectar um número real e passar a ter dados de verdade.
 Com o modo demo entregue, o protótipo está navegável de ponta a ponta. O que
 falta, em ordem:
 
-1. **Conectar um número real** na stack de `docker-compose.dev.yaml` e conferir
-   a tela de Webhook com headers contra ele. A stack está pronta; falta parear.
-2. **Avaliar o protótipo com a operação.** Continua sendo o gate para o resto.
-3. **Retomar o plano a partir da Task 2** (vitest). A Task 1 está feita; a
-   Task 3 foi entregue e merece testes — `parseHeadersJson` já é lógica pura,
-   escrita para ser testável.
-4. Com um número conectado e mensagens reais no banco, a fase 1 da tela de
-   Performance passa a ser mensurável: é o `loadTimeMs` que decide se vale
-   construir o endpoint agregado da fase 2.
+A fase 1 está completa: Tasks 1 a 8 do plano entregues, com um número real
+conectado. Falta:
+
+1. **Validar a tela num navegador, com a operação.** Nada da UI foi clicado —
+   só build, typecheck e testes de lógica pura. É o gate de verdade.
+2. **Task 9: buildar o submódulo no `Dockerfile` da API.** Hoje ele copia o
+   `manager/dist` commitado, que está velho. Enquanto isso não for feito, o
+   manager em `http://localhost:8080/manager` não tem nada desta entrega.
+3. **Testes para `parseHeadersJson`.** O vitest já existe e a função já é pura;
+   ficou sem cobertura.
+4. **Repetir a medição de `loadTimeMs` com volume real.** Os 552 ms saíram de
+   ~200 mensagens. É esse número, não a intuição, que decide a fase 2.
+5. **Validador de daltonismo na paleta** (dívida 4 da seção 5).
 
 Se a avaliação mudar as decisões, revisar o spec primeiro, depois o plano, antes
 de codificar.

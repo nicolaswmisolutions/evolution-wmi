@@ -1,0 +1,19 @@
+# Manager em modo demo: sobe sozinho, sem API, sem banco, sem .env.
+#
+# A API é simulada dentro do navegador (src/lib/demo/ no submódulo), então o
+# login aceita qualquer credencial e as instâncias são fictícias. Serve para
+# prototipar tela; não fala com o WhatsApp.
+#
+# Para conectar um número de verdade, use docker-compose.dev.yaml.
+
+services:
+  frontend:
+    container_name: evolution_frontend_demo
+    image: evolution/manager:demo
+    build:
+      context: ./evolution-manager-v2
+      args:
+        VITE_DEMO_MODE: "true"
+    restart: always
+    ports:
+      - "3001:80"

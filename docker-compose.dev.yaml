@@ -1,19 +1,28 @@
+# Stack local completa: API deste fork + Postgres + Redis + manager real.
+#
+# É a stack necessária para conectar um número de verdade. Para prototipagem
+# sem backend algum, use docker-compose.demo.yaml.
+#
+# Requer um arquivo .env na raiz (não versionado). Gere o seu a partir de
+# .env.example — veja docs/superpowers/HANDOFF-manager-performance.md.
+
 services:
   api:
     container_name: evolution_api
     image: evolution/api:local
     build: .
     restart: always
+    depends_on:
+      - evolution-postgres
+      - evolution-redis
     ports:
-      - 8080:8080
+      - "8080:8080"
     volumes:
       - evolution_instances:/evolution/instances
     networks:
       - evolution-net
     env_file:
       - .env
-    expose:
-      - 8080
 
   frontend:
     container_name: evolution_frontend
@@ -21,18 +30,46 @@ services:
     build:
       context: ./evolution-manager-v2
       args:
-        # Sobe o manager com a API mockada no navegador, sem backend algum.
-        # Só para prototipagem — nunca em ambiente exposto.
-        VITE_DEMO_MODE: "true"
+        # Manager real: fala com a API acima. O mock fica no compose de demo.
+        VITE_DEMO_MODE: "false"
     restart: always
     ports:
       - "3000:80"
     networks:
       - evolution-net
 
+  evolution-postgres:
+    container_name: evolution_postgres
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["postgres", "-c", "max_connections=1000", "-c", "listen_addresses=*"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - evolution-net
+    expose:
+      - "5432"
+
+  evolution-redis:
+    container_name: evolution_redis
+    image: redis:latest
+    restart: always
+    command: ["redis-server", "--port", "6379", "--appendonly", "yes"]
+    volumes:
+      - evolution_redis:/data
+    networks:
+      - evolution-net
+    expose:
+      - "6379"
+
 volumes:
   evolution_instances:
-
+  evolution_redis:
+  postgres_data:
 
 networks:
   evolution-net:

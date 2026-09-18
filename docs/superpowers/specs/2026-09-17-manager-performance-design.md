@@ -41,9 +41,20 @@ Levantado antes do desenho, e relevante para entender as decisões:
 não conhece o campo: seu `FormSchema` cobre apenas `enabled`, `url`, `events`, `base64` e
 `byEvents`.
 
-Consequência: quem configurou headers via API não os vê na UI, e **qualquer save feito pela
-UI envia um payload sem `headers`, podendo apagá-los**. É perda de dados, não apenas uma
-funcionalidade ausente. Por isso tem prioridade sobre os gráficos.
+Consequência: quem configurou headers via API **não os vê nem consegue editá-los pela UI**.
+
+> **Correção de 2026-09-18, medida contra a API rodando localmente.** Este documento
+> afirmava que o save da UI *apagava* os headers. Não apaga. O `update` do Prisma em
+> `webhook.controller.ts:42` recebe `headers: data.webhook?.headers`, e um payload sem o
+> campo manda `undefined`, que o Prisma interpreta como "não alterar". Verificado: um save
+> sem `headers` trocou a URL e preservou os headers.
+>
+> O risco real é o **inverso**, e nasce ao adicionar o campo: uma vez que o formulário passa
+> a enviar `headers` sempre, mandar `{}` **sobrescreve** — isso sim foi reproduzido. Logo o
+> formulário só pode enviar o campo depois de ter carregado o valor existente.
+
+Continua valendo como item de alta prioridade, mas como **funcionalidade ausente com risco
+de regressão na implementação**, não como perda de dados em curso.
 
 ## 3. Escopo
 
@@ -221,8 +232,9 @@ Trabalho:
 2. Carregar os headers existentes vindos do `find` ao montar o formulário.
 3. Reenviá-los no save, encerrando a perda silenciosa descrita na seção 2.
 
-Este item é o **primeiro a ser implementado**: é correção de perda de dados e independe de
-todo o resto.
+Este item é o **primeiro a ser implementado**: independe de todo o resto. Ver a correção na
+seção 2 sobre a natureza do bug — e note que o passo 3 é o que introduz risco, não o que o
+remove: enviar `headers` antes de ter lido os existentes apaga o que estava salvo.
 
 ## 8. Tratamento de erros
 

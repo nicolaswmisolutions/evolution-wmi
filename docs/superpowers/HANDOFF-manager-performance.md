@@ -42,12 +42,14 @@ O submódulo aponta para o fork da WMI:
 
 ## 4. Estado do git
 
-Nada foi enviado ao remoto. Tudo local, na branch `prototype`.
+A branch `prototype` **existe nos dois remotos** desde 2026-09-18, e o
+`.gitmodules` já registra `branch = prototype`.
 
 **`evolution-wmi`** (raiz):
 
 ```
-(esta sessão)  build(manager): serve the demo-mode manager from the dev compose
+b1bd29ae build(manager): track the prototype branch of the manager submodule
+21ca5e4e build(manager): serve the demo-mode manager from the dev compose
 a6cbe35f build(manager): bump submodule with the performance prototype
 eb9dd9c7 docs(manager): add implementation plan for the performance screen
 4360ad8c build(manager): point manager submodule to the WMI fork
@@ -152,28 +154,48 @@ Estas **devem ser desfeitas** na implementação real:
 Requer Docker Desktop rodando. **Tudo é buildado e executado em container** —
 nada roda direto na máquina (preferência explícita do usuário).
 
+São **dois** ambientes, em portas diferentes, e podem rodar ao mesmo tempo.
+
+### Stack real — para conectar um número (porta 3000)
+
+`docker-compose.dev.yaml`: API deste fork + Postgres 15 + Redis + manager real.
+
+Exige um `.env` na raiz, **não versionado** (`*.env` está no `.gitignore`). Gere
+a partir de `.env.example` trocando pelo menos:
+
+| Variável | Valor local |
+|---|---|
+| `SERVER_URL` | `http://localhost:8080` |
+| `DATABASE_CONNECTION_URI` | `postgresql://evolution:<senha>@evolution-postgres:5432/evolution?schema=public` |
+| `CACHE_REDIS_URI` | `redis://evolution-redis:6379/6` |
+| `AUTHENTICATION_API_KEY` | **gere uma nova** — nunca a de exemplo |
+| `POSTGRES_DATABASE` / `POSTGRES_USERNAME` / `POSTGRES_PASSWORD` | consumidas pelo compose; não existem no `.env.example` |
+| `TELEMETRY_ENABLED` | `false` em local |
+
 ```bash
 cd /d/WMI/evolution/evolution-wmi
-
-# Se o submódulo estiver vazio:
-git submodule update --init --recursive
-
-# Buildar e subir o manager
-docker compose -f docker-compose.dev.yaml build frontend
-docker compose -f docker-compose.dev.yaml up -d frontend
+git submodule update --init --recursive   # se o submódulo estiver vazio
+docker compose -f docker-compose.dev.yaml up -d --build
 ```
 
-Abrir **http://localhost:3000/manager/login** e entrar com **qualquer** URL e
-qualquer chave — em modo demo o login sempre aceita. Dali: duas instâncias
-(`suporte-wmi` e `comercial-wmi`) já conectadas, cada uma com headers de webhook
-diferentes, e o botão de criar instância leva ao QR simulado, que vira `open`
-uns 6 segundos depois.
+Login em **http://localhost:3000/manager/login** com servidor
+`http://localhost:8080` e a sua `AUTHENTICATION_API_KEY`. As migrations rodam
+sozinhas no start da API (`deploy_database.sh` no entrypoint).
 
-Para voltar ao estado inicial, apagar a chave `evolution-demo-state` do
-`localStorage` (ou usar `resetDemoState()` de `src/lib/demo/store.ts`).
+### Stack demo — para prototipar sem backend (porta 3001)
 
-Para um build **sem** modo demo, basta não passar o argumento:
-`docker build --build-arg VITE_DEMO_MODE=false ./evolution-manager-v2`.
+```bash
+docker compose -f docker-compose.demo.yaml up -d --build
+```
+
+**http://localhost:3001/manager/login**, com **qualquer** URL e qualquer chave —
+em modo demo o login sempre aceita. Dali: duas instâncias (`suporte-wmi` e
+`comercial-wmi`) já conectadas, cada uma com headers de webhook diferentes, e o
+botão de criar instância leva ao QR simulado, que vira `open` uns 6 segundos
+depois.
+
+Para zerar, apagar a chave `evolution-demo-state` do `localStorage` (ou usar
+`resetDemoState()` de `src/lib/demo/store.ts`).
 
 Rodar testes no submódulo (quando existirem, a partir da Task 2 do plano):
 
@@ -187,12 +209,18 @@ docker run --rm -v "$(pwd)":/app -w /app node:22-alpine \
 
 Levantadas na análise; não precisam ser redescobertas.
 
-**Headers de webhook são um bug de perda de dados.** `Webhook.headers` (JSONB) é
-persistido pela API e aplicado em
-`src/api/integrations/event/webhook/webhook.controller.ts:78`, mas o `FormSchema`
-da página Webhook do manager não conhece o campo. Todo save pela UI envia payload
-sem `headers`, **podendo apagar** os configurados via API. É o item de maior
-prioridade do plano, acima dos gráficos.
+**Headers de webhook: o diagnóstico anterior estava errado.** `Webhook.headers`
+(JSONB) é persistido pela API e aplicado no envio, e o `FormSchema` da página
+Webhook não conhecia o campo. Mas o save **não apagava** os headers: o `update`
+do Prisma recebe `undefined` quando o campo falta, e `undefined` significa "não
+alterar". Medido contra a API local em 2026-09-18 — um save sem `headers` trocou
+a URL e preservou os headers.
+
+O risco real aparece **ao adicionar o campo**: com o formulário enviando
+`headers` sempre, um `{}` sobrescreve os salvos. Reproduzido. Por isso o
+`onSubmit` omite o campo enquanto o `find` não respondeu.
+
+Era funcionalidade ausente, não perda de dados em curso.
 
 **`findMessages` devolve `count`.** Em
 `src/api/integrations/channel/whatsapp/whatsapp.baileys.service.ts:5016`, aceita
@@ -246,14 +274,17 @@ não existe — que é o caso deste backend. Se um dia o backend responder
    outro processo, provavelmente o VSCode. Remover do workspace e apagar.
 4. **Artifact vazio.** Foi criado um artifact em claude.ai antes de ficar claro
    que tudo deveria ser Docker. Está vazio e privado; apagar se não for usado.
-5. **Ambiente com API — é o próximo bloqueio.** Não existe stack local com API +
-   Postgres subindo. O `docker-compose.dev.yaml` declara `env_file: - .env`
-   (inexistente) e não tem banco; o `docker-compose.yaml` completo tem Postgres e
-   Redis. O modo demo contorna isso para prototipagem, mas **conectar um número
-   de verdade exige essa stack** — o mock não fala com o WhatsApp.
-6. **A correção de headers ainda não foi provada contra backend real.** O campo
-   JSON foi exercitado só contra o adaptador demo. O bug de perda silenciosa
-   descrito na seção 7 continua de pé até ser testado com API e banco.
+5. ~~Ambiente com API~~ — **resolvido.** `docker-compose.dev.yaml` agora sobe API +
+   Postgres + Redis + manager real. Verificado: `GET /` responde, `fetchInstances`
+   autentica (401 sem chave), e as migrations criaram as tabelas.
+6. **Conectar um número de verdade ainda não foi feito.** A stack está pronta e
+   o `webhook/set` + `webhook/find` foram exercitados por `curl` contra a API
+   real, mas **ninguém pareou um celular ainda** — é o passo do usuário.
+7. **A tela de headers não foi clicada num navegador.** A lógica foi validada
+   contra a API por `curl`; o formulário em si só passou por build e typecheck.
+8. **Instância `teste-headers` ficou no banco local**, criada para reproduzir o
+   comportamento dos headers. Apagar quando não for mais útil:
+   `curl -X DELETE -H "apikey: $KEY" http://localhost:8080/instance/delete/teste-headers`
 
 ## 9. Próximo passo sugerido
 
@@ -263,14 +294,15 @@ coisa**, e só então conectar um número real e passar a ter dados de verdade.
 Com o modo demo entregue, o protótipo está navegável de ponta a ponta. O que
 falta, em ordem:
 
-1. **Avaliar o protótipo com a operação.** É o passo que estava em curso desde a
-   sessão anterior e continua sendo o gate.
-2. **Subir a stack com API + Postgres**, para conectar um número real
-   (pendência 5). Sem ela não há dados, e sem dados a fase 1 não pode ser
-   medida.
-3. **Retomar o plano a partir da Task 2** (vitest). A Task 1 está feita; a Task
-   3 foi entregue em forma de protótipo e precisa ser revalidada contra o
-   backend real.
+1. **Conectar um número real** na stack de `docker-compose.dev.yaml` e conferir
+   a tela de Webhook com headers contra ele. A stack está pronta; falta parear.
+2. **Avaliar o protótipo com a operação.** Continua sendo o gate para o resto.
+3. **Retomar o plano a partir da Task 2** (vitest). A Task 1 está feita; a
+   Task 3 foi entregue e merece testes — `parseHeadersJson` já é lógica pura,
+   escrita para ser testável.
+4. Com um número conectado e mensagens reais no banco, a fase 1 da tela de
+   Performance passa a ser mensurável: é o `loadTimeMs` que decide se vale
+   construir o endpoint agregado da fase 2.
 
 Se a avaliação mudar as decisões, revisar o spec primeiro, depois o plano, antes
 de codificar.

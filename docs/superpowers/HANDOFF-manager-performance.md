@@ -42,30 +42,36 @@ O submódulo aponta para o fork da WMI:
 
 ## 4. Estado do git
 
-A branch `prototype` **existe nos dois remotos** desde 2026-09-18, e o
-`.gitmodules` já registra `branch = prototype`.
+Tudo **empurrado** para os dois remotos na branch `prototype`, que já existe lá.
+O `.gitmodules` registra `branch = prototype`.
 
 **`evolution-wmi`** (raiz):
-
 ```
+22c5d8a7 build(api): compile the manager submodule into the image
+9c7b2a6f build(manager): bump submodule with the WMI theme layer
+9254b41d build(manager): bump submodule with the real-data performance screen
+882c1233 docs(manager): warn about the two login traps in the split local setup
+853c256f docs(manager): record that the stack is ready to pair a real number
+8536db6b fix(stack): keep the demo compose from tearing down the real stack
+c8476a81 build(stack): add a local stack with API, Postgres and Redis
 b1bd29ae build(manager): track the prototype branch of the manager submodule
 21ca5e4e build(manager): serve the demo-mode manager from the dev compose
-a6cbe35f build(manager): bump submodule with the performance prototype
-eb9dd9c7 docs(manager): add implementation plan for the performance screen
-4360ad8c build(manager): point manager submodule to the WMI fork
-d33672c6 docs(manager): add design spec for performance dashboard and webhook headers
 ```
 
 **`evolution-manager-v2`** (submódulo), sobre `95d27b4` do fork:
-
 ```
+689c4d4 fix(login): stop suggesting the panel's own address as the API server
+bc1ca70 style(theme): apply the WMI visual identity through the token layer
+81d2656 feat(performance): read the performance screen from real instance data
+6853199 fix(webhook): keep stored headers when the form saves before loading them
 456e4d1 feat(webhook): let the form read and write custom headers as JSON
 84cc6e7 feat(demo): run the manager without a backend behind a build flag
 33422b3 feat(performance): add prototype performance screen with mock data
 96a7630 fix(docker): repair the manager image build
 ```
 
-Árvore limpa nos dois. `.claude/` fica **fora** dos commits, por decisão do usuário.
+Árvore limpa nos dois, sincronizada com `origin`. `.claude/` fica **fora** dos
+commits, por decisão do usuário.
 
 ## 5. O que já foi feito
 
@@ -159,6 +165,33 @@ o bastante para a fase 2 não ser urgente. A ressalva é o volume: esta mediçã
 sobre ~200 mensagens e sem o índice `(instanceId, messageTimestamp)`. Refazer a
 medida numa instância com volume real antes de concluir.
 
+### Identidade visual WMI (commit `bc1ca70`) e dois bugs (`689c4d4`, `22c5d8a7`)
+
+O tema saiu do cinza neutro com verde Evolution para o padrão WMI, **por uma
+camada de tokens** no fim de `src/index.css`, não tela por tela: todo componente
+que já usa `bg-background`, `text-muted-foreground` ou `rounded-lg` herdou.
+O diff fica num arquivo só, o que mantém o rebase com o upstream viável.
+
+As paletas de gráfico foram **computadas com o validador da skill de dataviz**,
+não escolhidas:
+
+- Séries `#2563EB` / `#0891B2` — passa nos cinco testes nos dois temas.
+- Rampa de entrega: ordinal, um hue. **O modo claro tem degraus próprios** —
+  o azul pálido do tema escuro fica em 1,42:1 sobre branco, invisível.
+- A dívida antiga de daltonismo era falso alarme: o verde/azul original passava
+  com ΔE 23,7. O problema real era outro — a mesma cor significava "Enviadas"
+  num gráfico e "Lida" no vizinho. Corrigido.
+
+Ao trocar qualquer cor de gráfico, **rode o validador de novo**:
+`node scripts/validate_palette.js "<hex,hex>" --mode dark --surface "#0C1221"`.
+
+Dois bugs fechados junto:
+
+1. **Login** sugeria a própria origem como servidor. Agora lembra o último que
+   funcionou, aceita `VITE_DEFAULT_SERVER_URL`, e o erro diz o que corrigir.
+2. **Task 9**: o `Dockerfile` da API compila o submódulo. O `/manager` da API
+   deixou de servir bundle velho.
+
 ### Dívidas do protótipo — situação
 
 Estas **deviam ser desfeitas** na implementação real:
@@ -204,7 +237,6 @@ a partir de `.env.example` trocando pelo menos:
 | `AUTHENTICATION_API_KEY` | **gere uma nova** — nunca a de exemplo |
 | `POSTGRES_DATABASE` / `POSTGRES_USERNAME` / `POSTGRES_PASSWORD` | consumidas pelo compose; não existem no `.env.example` |
 | `TELEMETRY_ENABLED` | `false` em local |
-
 ```bash
 cd /d/WMI/evolution/evolution-wmi
 git submodule update --init --recursive   # se o submódulo estiver vazio
@@ -235,7 +267,6 @@ com header `apikey` e o `POST /verify-creds` respondem com
 `Access-Control-Allow-Origin: http://localhost:3000`. Chave errada devolve 401.
 
 ### Stack demo — para prototipar sem backend (porta 3001)
-
 ```bash
 docker compose -f docker-compose.demo.yaml up -d --build
 ```
@@ -255,7 +286,6 @@ Para zerar, apagar a chave `evolution-demo-state` do `localStorage` (ou usar
 `resetDemoState()` de `src/lib/demo/store.ts`).
 
 Rodar testes no submódulo (quando existirem, a partir da Task 2 do plano):
-
 ```bash
 cd evolution-manager-v2
 docker run --rm -v "$(pwd)":/app -w /app node:22-alpine \

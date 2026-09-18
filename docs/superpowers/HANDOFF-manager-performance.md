@@ -182,6 +182,24 @@ Login em **http://localhost:3000/manager/login** com servidor
 `http://localhost:8080` e a sua `AUTHENTICATION_API_KEY`. As migrations rodam
 sozinhas no start da API (`deploy_database.sh` no entrypoint).
 
+**Duas armadilhas neste arranjo**, ambas verificadas:
+
+1. **O campo de servidor vem preenchido errado.** O formulário sugere
+   `window.location.origin`, ou seja `http://localhost:3000` — que é o nginx do
+   manager, não a API. Deixar o valor sugerido faz o `verifyServer` receber HTML
+   em vez de JSON e o login falhar com "servidor inválido". **Troque para
+   `http://localhost:8080`.** Faz sentido no arranjo upstream, onde a própria API
+   serve o manager na mesma origem; aqui eles estão separados.
+2. **Não use http://localhost:8080/manager.** A API serve ali o `manager/dist`
+   commitado, que está **desatualizado** — conferido: aquele bundle não tem o
+   campo de headers. O `Dockerfile` da API faz `COPY ./manager ./manager` e nunca
+   builda o submódulo (Task 9 do plano). O manager com as mudanças é o da
+   porta 3000.
+
+O CORS foi verificado do navegador para a API: `GET /`, o preflight `OPTIONS`
+com header `apikey` e o `POST /verify-creds` respondem com
+`Access-Control-Allow-Origin: http://localhost:3000`. Chave errada devolve 401.
+
 ### Stack demo — para prototipar sem backend (porta 3001)
 
 ```bash

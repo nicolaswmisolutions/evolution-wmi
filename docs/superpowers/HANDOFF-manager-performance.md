@@ -188,6 +188,11 @@ sozinhas no start da API (`deploy_database.sh` no entrypoint).
 docker compose -f docker-compose.demo.yaml up -d --build
 ```
 
+O compose de demo declara `name: evolution-demo` e chama o serviço de
+`manager-demo` **de propósito**. Sem isso o compose entende os dois `frontend`
+como o mesmo serviço do mesmo projeto e **derruba a stack real** ao subir a
+demo — aconteceu.
+
 **http://localhost:3001/manager/login**, com **qualquer** URL e qualquer chave —
 em modo demo o login sempre aceita. Dali: duas instâncias (`suporte-wmi` e
 `comercial-wmi`) já conectadas, cada uma com headers de webhook diferentes, e o

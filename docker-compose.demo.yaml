@@ -4,10 +4,16 @@
 # login aceita qualquer credencial e as instâncias são fictícias. Serve para
 # prototipar tela; não fala com o WhatsApp.
 #
+# Projeto e serviço têm nomes próprios de propósito: sem isso, o compose trata
+# este `frontend` como o mesmo serviço do docker-compose.dev.yaml e derruba a
+# stack real ao subir a demo.
+#
 # Para conectar um número de verdade, use docker-compose.dev.yaml.
 
+name: evolution-demo
+
 services:
-  frontend:
+  manager-demo:
     container_name: evolution_frontend_demo
     image: evolution/manager:demo
     build:

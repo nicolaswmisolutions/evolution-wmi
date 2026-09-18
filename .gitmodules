@@ -1,3 +1,4 @@
 [submodule "evolution-manager-v2"]
 	path = evolution-manager-v2
 	url = https://github.com/nicolaswmisolutions/evolution-manager-v2.git
+	branch = prototype

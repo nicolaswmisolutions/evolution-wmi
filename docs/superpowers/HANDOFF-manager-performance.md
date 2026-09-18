@@ -282,14 +282,14 @@ não existe — que é o caso deste backend. Se um dia o backend responder
 5. ~~Ambiente com API~~ — **resolvido.** `docker-compose.dev.yaml` agora sobe API +
    Postgres + Redis + manager real. Verificado: `GET /` responde, `fetchInstances`
    autentica (401 sem chave), e as migrations criaram as tabelas.
-6. **Conectar um número de verdade ainda não foi feito.** A stack está pronta e
-   o `webhook/set` + `webhook/find` foram exercitados por `curl` contra a API
-   real, mas **ninguém pareou um celular ainda** — é o passo do usuário.
+6. **Conectar um número de verdade ainda não foi feito** — é o passo do usuário.
+   A prontidão foi verificada: `instance/create` com `qrcode:true` devolveu um
+   QR real (código de 217 caracteres e PNG base64 de 12 KB), o que só acontece
+   se o container alcançou os servidores do WhatsApp. Sem erros no log da API.
 7. **A tela de headers não foi clicada num navegador.** A lógica foi validada
    contra a API por `curl`; o formulário em si só passou por build e typecheck.
-8. **Instância `teste-headers` ficou no banco local**, criada para reproduzir o
-   comportamento dos headers. Apagar quando não for mais útil:
-   `curl -X DELETE -H "apikey: $KEY" http://localhost:8080/instance/delete/teste-headers`
+8. **O banco local está limpo** — as instâncias `teste-qr` e `teste-headers`,
+   usadas nas verificações, foram apagadas.
 
 ## 9. Próximo passo sugerido
 

@@ -1,3 +1,23 @@
+# O manager é um submódulo (evolution-manager-v2) e precisa ser compilado aqui.
+# Antes, a imagem copiava o manager/dist commitado, então qualquer mudança de
+# UI só chegava em /manager se alguém lembrasse de commitar o bundle — e
+# ninguém lembrava. Exige `git submodule update --init --recursive` no clone.
+FROM node:22-alpine AS manager-build
+
+WORKDIR /usr/src/manager
+
+COPY ./evolution-manager-v2/package*.json ./
+RUN npm ci --ignore-scripts
+
+COPY ./evolution-manager-v2/src ./src
+COPY ./evolution-manager-v2/public ./public
+COPY ./evolution-manager-v2/index.html ./evolution-manager-v2/components.json ./evolution-manager-v2/vite.config.ts ./
+COPY ./evolution-manager-v2/tsconfig.json ./evolution-manager-v2/tsconfig.app.json ./evolution-manager-v2/tsconfig.node.json ./
+
+# Sem modo demo: esta imagem serve o manager junto da API real.
+ENV VITE_DEMO_MODE=false
+RUN npm run build
+
 FROM node:24-alpine AS builder
 
 RUN apk update && \
@@ -18,7 +38,7 @@ RUN npm ci --silent
 COPY ./src ./src
 COPY ./public ./public
 COPY ./prisma ./prisma
-COPY ./manager ./manager
+COPY --from=manager-build /usr/src/manager/dist ./manager/dist
 COPY ./.env.example ./.env
 COPY ./runWithProvider.js ./
 

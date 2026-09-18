@@ -215,19 +215,20 @@ Login em **http://localhost:3000/manager/login** com servidor
 `http://localhost:8080` e a sua `AUTHENTICATION_API_KEY`. As migrations rodam
 sozinhas no start da API (`deploy_database.sh` no entrypoint).
 
-**Duas armadilhas neste arranjo**, ambas verificadas:
+As duas armadilhas que existiam aqui **foram corrigidas**:
 
-1. **O campo de servidor vem preenchido errado.** O formulário sugere
-   `window.location.origin`, ou seja `http://localhost:3000` — que é o nginx do
-   manager, não a API. Deixar o valor sugerido faz o `verifyServer` receber HTML
-   em vez de JSON e o login falhar com "servidor inválido". **Troque para
-   `http://localhost:8080`.** Faz sentido no arranjo upstream, onde a própria API
-   serve o manager na mesma origem; aqui eles estão separados.
-2. **Não use http://localhost:8080/manager.** A API serve ali o `manager/dist`
-   commitado, que está **desatualizado** — conferido: aquele bundle não tem o
-   campo de headers. O `Dockerfile` da API faz `COPY ./manager ./manager` e nunca
-   builda o submódulo (Task 9 do plano). O manager com as mudanças é o da
-   porta 3000.
+1. ~~O campo de servidor vinha preenchido com a própria origem~~ — o login agora
+   lembra o último servidor que funcionou (`lastApiUrl`, que sobrevive ao
+   logout), aceita um padrão de build em `VITE_DEFAULT_SERVER_URL`, e só então
+   cai na origem. O erro de servidor inválido passou a dizer o que corrigir.
+   **Na primeira vez ainda é preciso digitar `http://localhost:8080`.**
+2. ~~O `/manager` da API servia um bundle velho~~ — **Task 9 feita**. O
+   `Dockerfile` ganhou o estágio `manager-build`, que compila o submódulo.
+   Verificado dentro do container: o bundle servido tem o campo de headers, a
+   tela de Performance e o tema WMI, e não tem o mock do modo demo.
+
+   Consequência: **o build da API agora exige o submódulo inicializado**
+   (`git submodule update --init --recursive`), e demora mais.
 
 O CORS foi verificado do navegador para a API: `GET /`, o preflight `OPTIONS`
 com header `apikey` e o `POST /verify-creds` respondem com
@@ -355,9 +356,10 @@ conectado. Falta:
 
 1. **Validar a tela num navegador, com a operação.** Nada da UI foi clicado —
    só build, typecheck e testes de lógica pura. É o gate de verdade.
-2. **Task 9: buildar o submódulo no `Dockerfile` da API.** Hoje ele copia o
-   `manager/dist` commitado, que está velho. Enquanto isso não for feito, o
-   manager em `http://localhost:8080/manager` não tem nada desta entrega.
+2. **Remover o `manager/dist` do versionamento.** O spec (seção 10) manda
+   mantê-lo até o build via Docker ser verificado em deploy real — foi
+   verificado em local, não em deploy. Enquanto os dois existirem, um dia
+   alguém publica o artefato velho sem perceber.
 3. **Testes para `parseHeadersJson`.** O vitest já existe e a função já é pura;
    ficou sem cobertura.
 4. **Repetir a medição de `loadTimeMs` com volume real.** Os 552 ms saíram de
